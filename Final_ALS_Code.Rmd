@@ -1,0 +1,1670 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+title: "ALS Capstone Project"
+
+output:
+
+word_document: default
+
+html_notebook: default
+
+pdf_document: default
+
+html_document:
+
+```         
+df_print: paged
+```
+
+
+```{r}
+# Create a list of required packages
+packages <- c("tidyverse", "ggplot2", "dplyr", "ggforce", "lubridate")
+
+# Load the required packages
+purrr::walk(packages, library, character.only = T)
+
+# Display citations for the required packages
+for (package in packages){
+  print(citation(package = package))}
+```
+
+```{r}
+setwd("C:/Users/samzo/OneDrive/Documents/St Louis Rehab new data")
+list.files()
+#Importing all ALS Data files 
+als_history <- read.csv("ALS_History.csv")
+als_frsr <- read.csv("ALSFRSR.csv")
+als_devices <- read.csv("AssistiveDevices.csv")
+als_demographics <- read.csv("Demographics.csv")
+als_fall <- read.csv("Fall_Log.csv")
+als_sitstand <- read.csv("FIV.csv")
+als_grip <- read.csv("Grip_Strength.csv")
+als_hhd <- read.csv("HHD.csv")
+als_hospitalization <- read.csv("Hospitalization.csv")
+als_mortality <- read.csv("Mortality.csv")
+als_niv <- read.csv("NIV.csv")
+als_pav <- read.csv("PAV.csv")
+als_peg <- read.csv("PEG.csv")
+als_walk <- read.csv("Ten_Meter_Walk.csv")
+```
+
+```{r}
+#removing those with PLS (per Epic documentation) from the data set
+
+als_demographics <- als_demographics[!(als_demographics$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+  
+  
+```
+
+```{r}
+#Recoding race variable so all columns are in one, with each integer representing a variable
+als_demographics$race <- ifelse(als_demographics$racewt == 1, "White", 
+                       ifelse(als_demographics$raceblk == 1, "Black/African American", 
+                              ifelse(als_demographics$raceasn == 1, "Asian", 
+                                     ifelse(als_demographics$racenh == 1, "Native Hawaiian/Pacific Islander", "American Indian/Alaska Native"))))
+
+
+# Recode the race column so that each race represents a number
+als_demographics$race_num <- as.integer(factor(als_demographics$race, levels = c("White", "Black", "Asian", "Hispanic", "American Indian")))
+
+```
+
+```{r}
+als_demographics
+race <- factor(als_demographics$race)
+```
+
+```{r}
+#Cleaning the file
+als_demographics <- als_demographics %>% select(-racewt,-raceblk,-raceasn,-racenh,-raceamin,-subject_uid)
+als_demographics
+```
+
+```{r}
+#Converting date columns in the ALS_history dataset to a date class
+als_history <- read_csv("ALS_History.csv", 
+    col_types = cols(Visit.Date = col_date(format = "%m/%d/%Y")))
+
+als_history$Visit.Date <- as.Date(als_history$'Visit Date', format = "%m/%d/%Y")
+als_history <- als_history %>%
+  mutate(diagdt = ifelse(diagdt %in% c('uu', 'UU'), '01', diagdt))
+
+als_history$onsetdt <- as.Date(als_history$onsetdt, format = "%m/%d/%Y")
+als_history$diagdt <- as.Date(als_history$diagdt, format = "%m/%d/%Y")
+als_history
+
+#removing individuals with PLS (per Epic documentation) from the study
+als_history <- als_history[!(als_history$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+```
+
+```{r}
+#Cleaning the file
+names(als_history)
+als_history <- rename(als_history, Visit.Name.his = 'Visit Name')
+als_history <- als_history %>% select( -subject_uid, -site_name, -location)
+als_history
+```
+
+```{r}
+#Cleaning the file
+als_fall$fllstdt <- as.Date(als_fall$fllstdt, format = "%m/%d/%y")
+als_fall$flenddt <- as.Date(als_fall$flenddt, format = "%m/%d/%y")
+als_fall <- als_fall[!(als_fall$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_fall
+```
+
+```{r}
+#Cleaning the file
+als_fall <- als_fall %>% select(-subject_uid, -site_name, -location)
+```
+
+```{r}
+#Cleaning the file and converting to a date format 
+als_sitstand
+als_sitstand <- als_sitstand[!(als_sitstand$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_sitstand$Visit.Date <- as.Date(als_sitstand$Visit.Date, format = "%Y-%m-%d ")
+als_sitstand
+als_sitstand <- als_sitstand %>% select(-evalin, -t1scomm, -subject_uid, -site_name, -location)
+
+```
+
+```{r}
+#Cleaning the file and converting date to a date format
+als_grip
+als_grip <- als_grip[!(als_grip$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_grip$Visit.Date <- as.Date(als_grip$Visit.Date, format = "%Y-%m-%d")
+als_grip
+als_grip <- als_grip %>% select(-subject_uid, -site_name, -location)
+
+
+```
+
+```{r}
+#Seeing the number of SubjectUIDs in the file 
+num_subjects_grip <- als_grip %>% 
+  distinct(SubjectUID) %>% 
+  n_distinct()
+num_subjects_grip
+```
+
+```{r}
+#Cleaning the file
+als_hhd
+als_hhd <- als_hhd[!(als_hhd$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_hhd$Visit.Date <- as.Date(als_hhd$Visit.Date, format = "%Y-%m-%d")
+als_hhd
+als_hhd <- als_hhd %>% select(-subject_uid, -site_name, -location)
+```
+
+```{r}
+#Cleaning the file 
+als_devices <- als_devices %>% select(-subject_uid, -site_name, -location)
+```
+
+```{r}
+#Cleaning the file 
+als_walk
+als_walk <- als_walk[!(als_walk$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_walk$Visit.Date <- as.Date(als_walk$Visit.Date, format = "%Y-%m-%d")
+als_walk <- als_walk %>% select(-subject_uid, -site_name, -location)
+```
+
+```{r}
+#Cleaning the file 
+als_frsr
+als_frsr <- als_frsr[!(als_frsr$SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB")), ]
+
+als_frsr$Visit.Date <- as.Date(als_frsr$Visit.Date, format = "%Y-%m-%d")
+als_frsr <- als_frsr %>% select(-subject_uid, -site_name, -location)
+
+```
+
+-Note down percentages of how much data is missing among columns
+
+```{r}
+
+#Attempting the full join
+data1 <- full_join(als_history, als_fall, by = c("SubjectUID"))
+data2 <- full_join(data1, als_sitstand, by = c("SubjectUID","Visit.Date"))
+data3 <- full_join(data2, als_grip, by = c("SubjectUID","Visit.Date"))
+data4 <- full_join(data3, als_hhd, by = c("SubjectUID","Visit.Date"))
+data5 <- full_join(data4, als_walk, by = c("SubjectUID","Visit.Date"))
+data6 <- full_join(data5, als_devices, by = c("SubjectUID"))
+data7 <- full_join(data6, als_frsr, by = c("SubjectUID","Visit.Date"))
+rm(data1, data2, data3, data4, data5, data6)
+```
+
+```{r}
+# Rename the dataset
+final_data <- data7
+
+
+final_data <- final_data %>%
+  filter(!SubjectUID %in% c("NEUGA651YN8", "NEUBZ403HYD", "NEUMY597BB"))
+
+```
+
+```{r}
+final_data
+```
+
+```{r}
+#Attempting the inner join for the dataset
+data.1 <- full_join(als_history, als_fall, by = c("SubjectUID"))
+#data.1
+#als_sitstand
+data.2 <- inner_join(data.1, als_sitstand, by = c("SubjectUID","Visit.Date"))
+#data.2
+#als_grip
+data.3 <- inner_join(data.2, als_grip, by = c("SubjectUID","Visit.Date"))
+
+data.4 <- inner_join(data.3, als_hhd, by = c("SubjectUID","Visit.Date"))
+#als_walk
+data.5 <- inner_join(data.4, als_walk, by = c("SubjectUID","Visit.Date"))
+#als_devices
+data.6 <- inner_join(data.5, als_devices, by = c("SubjectUID"))
+#als_frsr
+data.7 <- inner_join(data.6, als_frsr, by = c("SubjectUID","Visit.Date"))
+data.7
+```
+
+```{r}
+data.7
+```
+
+```{r}
+#Unique SubjectUID's of the inner joined dataset
+unique_subjects <- data.7 %>% 
+  distinct(SubjectUID) %>% # remove duplicates
+  n_distinct() # count the number of unique values
+
+print(unique_subjects)
+```
+
+There are 74 observations/patients included in this study
+
+```{r}
+#Unique SubjectUID's of the full joined dataset
+unique_subjects_full <- data7 %>% 
+  distinct(SubjectUID) %>% # remove duplicates
+  n_distinct() # count the number of unique values
+
+print(unique_subjects_full)
+```
+
+WITH FULL JOIN DATASET:
+
+```{r}
+grouped_final2 <- data7 %>% 
+  group_by(SubjectUID) %>% # group the dataframe by SubjectUID
+  arrange(SubjectUID) # sort the rows within each group by SubjectUID
+```
+
+```{r}
+#Distinct visits per SubjectUID
+distinct_visits_full <- grouped_final2 %>%
+  group_by(SubjectUID) %>%
+  summarize(distinct_visits = n_distinct(Visit.Date))
+
+distinct_visits_full
+```
+
+```{r}
+#This code calculates the time difference between each visit of each SubjectUID
+result2 <- grouped_final2 %>%
+  arrange(SubjectUID, Visit.Date) %>%
+  distinct(SubjectUID, Visit.Date, .keep_all = TRUE) %>%
+  group_by(SubjectUID) %>%
+  mutate(time_diff_days = as.numeric(Visit.Date - lag(Visit.Date)), 
+         time_diff_months = round(time_diff_days/30.44, 2)) %>%
+  filter(!is.na(time_diff_months)) %>%
+  select(SubjectUID, Visit.Date, time_diff_months)
+
+result2
+```
+
+```{r}
+final.data <- data7 %>% 
+  arrange(SubjectUID, Visit.Date)
+
+final.data
+```
+
+Proportions of how many cells of each column have data.
+
+```{r}
+# Select only non-date/time columns
+non_date_cols <- final.data %>%
+  select_if(~!is.Date(.) & !is.POSIXct(.) & !is.POSIXlt(.))
+
+# Replace missing values in non-date/time columns
+non_date_cols[non_date_cols == "" | non_date_cols == "NA" | non_date_cols == "NULL"] <- NA 
+
+# Calculate proportion of non-missing values in each non-date/time column
+prop_non_missing <- colMeans(!is.na(non_date_cols))
+
+# Create a data frame with the results
+result <- data.frame(column = names(prop_non_missing),
+                     proportion_non_missing = prop_non_missing)
+
+# Order the data frame by proportion of non-missing values
+result <- result[order(-result$proportion_non_missing),]
+
+# Print the result
+print(result)
+```
+
+The Number of SubjectUID's that only have 1 distinct visit
+
+```{r}
+distinct_visits_full <- final.data %>%
+  group_by(SubjectUID) %>%
+  summarize(distinct_visits = n_distinct(Visit.Date))
+
+distinct_visits_one <- distinct_visits_full %>%
+  filter(distinct_visits == 1) %>%
+  select(SubjectUID)
+
+distinct_visits_one
+
+```
+
+```{r}
+#Distribution of visits
+ggplot(distinct_visits_full, aes(x = distinct_visits)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Distribution of Number of Distinct Visits per Patient",
+       x = "Number of Distinct Visits",
+       y = "Count")
+```
+
+```{r}
+mean(distinct_visits_full$distinct_visits)
+```
+
+Most Patients had about 6-7 distinct visits.
+
+```{r}
+library(dplyr)
+
+# Group by SubjectUID and find the earliest visit date for each
+earliest_visits <- final.data %>%
+  group_by(SubjectUID) %>%
+  summarize(earliest_visit = min(Visit.Date))
+
+# Merge with the original data to get the diagnosis date for each SubjectUID
+diagnosis_dates <- final.data %>%
+  distinct(SubjectUID, .keep_all = TRUE) %>%
+  select(SubjectUID, diagdt)
+
+# Merge the earliest visit dates and diagnosis dates data frames
+merged_data <- earliest_visits %>%
+  left_join(diagnosis_dates, by = "SubjectUID")
+
+# Calculate the difference between the diagnosis date and earliest visit date in months
+merged_data$diff_months <- as.numeric(difftime(merged_data$earliest_visit, merged_data$diagdt, units = "days"))/30.44
+
+# Select only the SubjectUID and diff_months columns
+result <- merged_data %>%
+  select(SubjectUID, diff_months)
+
+# Print the result
+print(result)
+```
+
+```{r}
+summary('diff_months')
+```
+
+The above code gives the difference between the diagnosis date and the first visit date
+
+```{r}
+final.data
+```
+
+```{r}
+#Making site of onset column 
+library(dplyr)
+library(tidyr)
+
+final.data <- final.data %>% 
+
+  mutate(site_summary = case_when(
+    hxgen == 1 ~ 1,
+    hxblb == 1 | hxblbsch == 1 | hxblbsw == 1 | hxax == 1 | hxaxnk == 1 | hxaxtr == 1 | hxaxtrrp == 1 ~ 2,
+     hxliu == 1 | hxliul == 1 | hxliur == 1 | hxliuhnd == 1 | hxliuarm == 1 ~ 3, 
+    hxlil == 1 | hxlill == 1 | hxlilr == 1 | hxlilft == 1 | hxlilleg == 1 ~ 4, 
+    hxot == 1 ~ 5, 
+    TRUE ~ NA_real_
+  ))
+```
+
+-Group by ID/take first row and see distribution
+
+```{r}
+final.data$site_summary
+```
+
+```{r}
+#Creating an average of all trial columns 
+
+#Left shoulder flexion trial average 
+final.data[final.data == ""] <- NA
+final.data[, c("lsft1", "lsft2", "lsft3")] <- lapply(final.data[, c("lsft1", "lsft2", "lsft3")], as.numeric)
+final.data$lsft.a <- rowMeans(select(final.data, lsft1, lsft2, lsft3), na.rm = TRUE)
+
+```
+
+```{r}
+#Right Shoulder Flexion Trial Average 
+final.data[, c("rsft1", "rsft2", "rsft3")] <- lapply(final.data[, c("rsft1", "rsft2", "rsft3")], as.numeric)
+final.data$rsft.avg <- rowMeans(select(final.data, rsft1, rsft2,rsft3), na.rm = TRUE)
+```
+
+```{r}
+#Left elbow flexion trial average 
+final.data[, c("left1", "left2", "left3")] <- lapply(final.data[, c("left1", "left2", "left3")], as.numeric)
+final.data$left.avg <- rowMeans(select(final.data, left1, left2,left3), na.rm = TRUE)
+```
+
+```{r}
+#Right elbow flexion trial average
+final.data[, c("reft1", "reft2", "reft3")] <- lapply(final.data[, c("reft1", "reft2", "reft3")], as.numeric)
+final.data$reft.avg <- rowMeans(select(final.data, reft1, reft2,reft3), na.rm = TRUE)
+```
+
+```{r}
+#Left elbow extention trial average
+final.data[, c("leet1", "leet2", "leet3")] <- lapply(final.data[, c("leet1", "leet2", "leet3")], as.numeric)
+final.data$leet.avg <- rowMeans(select(final.data, leet1, leet2, leet3), na.rm = TRUE)
+```
+
+```{r}
+#Right elbow extension trial average
+final.data[, c("reet1", "reet2", "reet3")] <- lapply(final.data[, c("reet1", "reet2", "reet3")], as.numeric)
+final.data$reet.avg <- rowMeans(select(final.data, reet1, reet2, reet3), na.rm = TRUE)
+```
+
+```{r}
+#Left wrist extension trial average 
+final.data[, c("lwet1", "lwet2", "lwet3")] <- lapply(final.data[, c("lwet1", "lwet2", "lwet3")], as.numeric)
+final.data$lwet.avg <- rowMeans(select(final.data, lwet1, lwet2, lwet3), na.rm = TRUE)
+```
+
+```{r}
+#Right wrist extension trial average 
+final.data[, c("rwet1", "rwet2", "rwet3")] <- lapply(final.data[, c("rwet1", "rwet2", "rwet3")], as.numeric)
+final.data$rwet.avg <- rowMeans(select(final.data, rwet1, rwet2, rwet3), na.rm = TRUE)
+```
+
+```{r}
+#Left hip flexion trial average 
+final.data[, c("lhft1", "lhft2", "lhft3")] <- lapply(final.data[, c("lhft1", "lhft2", "lhft3")], as.numeric)
+final.data$lhft.avg <- rowMeans(select(final.data, lhft1, lhft2, lhft3), na.rm = TRUE)
+```
+
+```{r}
+#Right hip flexion trial average
+final.data[, c("rhft1", "rhft2", "rhft3")] <- lapply(final.data[, c("rhft1", "rhft2", "rhft3")], as.numeric)
+final.data$rhft.avg <- rowMeans(select(final.data, rhft1, rhft2, rhft3), na.rm = TRUE)
+```
+
+```{r}
+#Left knee Flexion Trial 
+final.data[, c("lkft1", "lkft2", "lkft3")] <- lapply(final.data[, c("lkft1", "lkft2", "lkft3")], as.numeric)
+final.data$lkft.avg <- rowMeans(select(final.data, lkft1, lkft2, lkft3), na.rm = TRUE)
+```
+
+```{r}
+#Right knee flextion trial average 
+final.data[, c("rkft1", "rkft2", "rkft3")] <- lapply(final.data[, c("rkft1", "rkft2", "rkft3")], as.numeric)
+final.data$rkft.avg <- rowMeans(select(final.data, rkft1, rkft2, rkft3), na.rm = TRUE)
+```
+
+```{r}
+#Left knee Extension average 
+final.data[, c("lket1", "lket2", "lket3")] <- lapply(final.data[, c("lket1", "lket2", "lket3")], as.numeric)
+final.data$lket.avg <- rowMeans(select(final.data, lket1, lket2, lket3), na.rm = TRUE)
+```
+
+```{r}
+#Right knee Extension average 
+final.data[, c("rket1", "rket2", "rket3")] <- lapply(final.data[, c("rket1", "rket2", "rket3")], as.numeric)
+final.data$rket.avg <- rowMeans(select(final.data, rket1, rket2, rket3), na.rm = TRUE)
+```
+
+```{r}
+#Left ankle dorsiflexion average 
+final.data[, c("ladt1", "ladt2", "ladt3")] <- lapply(final.data[, c("ladt1", "ladt2", "ladt3")], as.numeric)
+final.data$ladt.avg <- rowMeans(select(final.data, ladt1, ladt2, ladt3), na.rm = TRUE)
+```
+
+```{r}
+#Right ankle dorsiflexion average 
+final.data[, c("radt1", "radt2", "radt3")] <- lapply(final.data[, c("radt1", "radt2", "radt3")], as.numeric)
+final.data$radt.avg <- rowMeans(select(final.data, radt1, radt2, radt3), na.rm = TRUE)
+```
+
+```{r}
+#Left First Dorsal Interosseous Contraction Trial Average
+final.data[, c("lfdict1", "lfdict2", "lfdict3")] <- lapply(final.data[, c("lfdict1", "lfdict2", "lfdict3")], as.numeric)
+final.data$lfdict.avg <- rowMeans(select(final.data, lfdict1, lfdict2, lfdict3), na.rm = TRUE)
+```
+
+```{r}
+#Right First Dorsal Interosseous Contraction T Average
+final.data[, c("rfdict1", "rfdict2", "rfdict3")] <- lapply(final.data[, c("rfdict1", "rfdict2", "rfdict3")], as.numeric)
+final.data$rfdict.avg <- rowMeans(select(final.data, rfdict1, rfdict2, rfdict3), na.rm = TRUE)
+```
+
+```{r}
+#Splitting up scoring in three different groups 
+
+#Bulbar Scoring Method
+final.data[, c("alsfrs1", "alsfrs2", "alsfrs3")] <- lapply(final.data[, c("alsfrs1", "alsfrs2", "alsfrs3")], as.numeric)
+final.data$bulbar.scoring <- rowSums(final.data[, c("alsfrs1", "alsfrs2", "alsfrs3")], na.rm = TRUE)
+
+```
+
+```{r}
+#Fine Motor Scoring Group 
+final.data[, c("alsfrs4", "alsfrs5a", "alsfrs5b", "alsfrs6")] <- lapply(final.data[, c("alsfrs4", "alsfrs5a", "alsfrs5b", "alsfrs6")], as.numeric)
+final.data$finemotor.scoring <- rowSums(final.data[, c("alsfrs4", "alsfrs5a", "alsfrs5b", "alsfrs6")], na.rm = TRUE)
+```
+
+```{r}
+#Gross Motor Scoring Group 
+final.data[, c("alsfrs7", "alsfrs8", "alsfrs9")] <- lapply(final.data[, c("alsfrs7", "alsfrs8", "alsfrs9")], as.numeric)
+final.data$grossmotor.scoring <- rowSums(final.data[, c("alsfrs7", "alsfrs8", "alsfrs9")], na.rm = TRUE)
+```
+
+```{r}
+#Respiratory Scoring Group 
+final.data[, c("alsfrsr1", "alsfrsr2", "alsfrsr3")] <- lapply(final.data[, c("alsfrsr1", "alsfrsr2", "alsfrsr3")], as.numeric)
+final.data$respiratory.scoring <- rowSums(final.data[, c("alsfrsr1", "alsfrsr2", "alsfrsr3")], na.rm = TRUE)
+```
+
+```{r}
+#Total Scoring Group 
+final.data[, c("finemotor.scoring", "grossmotor.scoring", "respiratory.scoring","bulbar.scoring" )] <- lapply(final.data[, c("finemotor.scoring", "grossmotor.scoring", "respiratory.scoring","bulbar.scoring")], as.numeric)
+final.data$als_totalscore <- rowSums(final.data[, c("finemotor.scoring", "grossmotor.scoring", "respiratory.scoring","bulbar.scoring")], na.rm = TRUE)
+```
+
+```{r}
+final.data
+```
+
+```{r}
+#Making a new dataframe for only the first visit. The final.data dataset has already been grouped by SubjectUID and the visit dates are in order.  
+
+#als_baseline <- distinct(final.data, SubjectUID, .keep_all = TRUE)
+```
+
+```{r}
+install.packages("tableone")
+
+```
+
+```{r}
+final.data$site_summary <- factor(final.data$site_summary)
+levels(final.data$site_summary)
+```
+
+```{r}
+final.data
+```
+
+```{r}
+#Making the demographics baseline dataset
+als_baselinedemo <- inner_join(als_demographics, als_history, by = c("SubjectUID"))
+```
+
+```{r}
+als_baselinedemo
+```
+
+```{r}
+#Making the site_summary variable for this dataset
+als_baselinedemo <- als_baselinedemo %>% 
+
+  mutate(site_summary = case_when(
+    hxgen == 1 ~ 1,
+    hxblb == 1 | hxblbsch == 1 | hxblbsw == 1 | hxax == 1 | hxaxnk == 1 | hxaxtr == 1 | hxaxtrrp == 1 ~ 2,
+   hxliu == 1 | hxliul == 1 | hxliur == 1 | hxliuhnd == 1 | hxliuarm == 1 ~ 3, 
+    hxlil == 1 | hxlill == 1 | hxlilr == 1 | hxlilft == 1 | hxlilleg == 1 ~ 4, 
+    hxot == 1 ~ 5, 
+    TRUE ~ NA_real_
+  ))
+
+als_baselinedemo
+```
+
+```{r}
+#Converting the Race variable into a factor variable 
+als_baselinedemo$race<- factor(als_baselinedemo$race)
+
+#Converting the site of onset recoded variable into a factor
+als_baselinedemo$site_summary <- factor(als_baselinedemo$site_summary)
+
+```
+
+```{r}
+#Visualizing normality of the age variable 
+ggplot(data = als_baselinedemo, mapping = (aes(x = age))) +
+  # Add a histogram layer
+  geom_histogram() +
+  # Set the x-axis label
+  xlab("Age") +
+  # Set the y-axis label
+  ylab("Count") +
+  # Set the plot title
+  ggtitle("Distribution of Age at Baseline") +
+  # Add the 'theme_minimal' theme
+  theme_minimal()
+```
+
+```{r}
+sw_age <- shapiro.test(als_baselinedemo$age)
+sw_age
+```
+
+This is not a normal distribution so will take note of that in CreateTableOne
+
+```{r}
+levels(als_baselinedemo$site_summary)
+levels(als_baselinedemo$site_summary) <- c("General", "Bulbar", "Upper Limb", "Lower Limb", "Other")
+```
+
+```{r}
+#Converting ethnicity to a factor variBLE
+als_baselinedemo
+
+als_baselinedemo$ethnic <- factor(als_baselinedemo$ethnic, levels = c(1, 2), labels = c("Hispanic or Latino", "Not Hispanic or Latino"))
+
+als_baselinedemo$sex <- factor(als_baselinedemo$sex, levels = c(1, 2), labels = c("Male", "Female"))
+
+
+
+
+```
+
+```{r}
+#Applying CreateTableOne() with race via site onset as Strata 
+library(tableone)
+als_baselinedemo_filtered <- als_baselinedemo %>% 
+  filter(site_summary != "General")
+
+als_baselinedemo_filtered <- als_baselinedemo_filtered %>% mutate(site_summary = factor(site_summary))
+observed_counts <- table(als_baselinedemo$sex)
+expected_counts <- c(male = 0.5, female = 0.5)
+chisq_test_sex <- chisq.test(observed_counts, p = expected_counts)
+
+p_value <- chisq_test_sex$p.value
+
+p_value
+
+race_onsetone <- CreateTableOne(vars = c("age","race","ethnic","sex"), data = als_baselinedemo_filtered, strata = "site_summary", addOverall = TRUE, test = TRUE)
+
+race_onsetoneprinted <- print(race_onsetone, nonnormal = c("age"), missing = TRUE, showAllLevels = TRUE, quote = FALSE)
+race_onsetone_tibble <- as_tibble(race_onsetoneprinted)
+```
+
+-Under some sections, we have 0, so can not conduct a chi-squared test on the categorical variables. Usually want atleast 5 in each category.
+
+```{r}
+write.csv(race_onsetone_tibble, file = "demographics_baselinereport.csv", row.names = FALSE)
+
+```
+
+```{r}
+#Now conducting CreateTableOne on the baseline dataset
+```
+
+```{r}
+als_baseline <- distinct(final.data, SubjectUID, .keep_all = TRUE)
+
+als_baseline
+```
+
+```{r}
+site_join <- als_baselinedemo[, c("site_summary", "SubjectUID")]
+
+als_baseline1 <- merge(als_baseline, site_join, by = "SubjectUID" )
+
+als_baseline1
+```
+
+```{r}
+#Making a vector of the continuous variables 
+continuous_vars <- c("age","lsft.a", "rsft.avg", "left.avg", "reft.avg", "leet.avg", "reet.avg", "lwet.avg", "rwet.avg", "lhft.avg","rhft.avg","lkft.avg","rkft.avg","lket.avg","rket.avg","ladt.avg","radt.avg","lfdict.avg","rfdict.avg","csgaitsp","t1snum")
+
+sw.lsft <- shapiro.test(als_baseline1$lsft.a)
+sw.rsft <- shapiro.test(als_baseline1$rsft.avg)
+sw.left <- shapiro.test(als_baseline1$left.avg)
+sw.reft <- shapiro.test(als_baseline1$reft.avg)
+sw.leet <- shapiro.test(als_baseline1$leet.avg)
+sw.reet <- shapiro.test(als_baseline1$reet.avg)
+#sw.lwet <- shapiro.test(als_baseline1$lwet.avg)
+#sw.rwet <- shapiro.test(als_baseline1$rwet.avg)
+sw.lhft <- shapiro.test(als_baseline1$lhft.avg)
+sw.rhft <- shapiro.test(als_baseline1$rhft.avg)
+#sw.lkft <- shapiro.test(als_baseline1$lkft.avg)
+#sw.rkft <- shapiro.test(als_baseline1$rkft.avg)
+sw.lket <- shapiro.test(als_baseline1$lket.avg)
+sw.rket <- shapiro.test(als_baseline1$rket.avg)
+sw.ladt <- shapiro.test(als_baseline1$ladt.avg)
+sw.radt <- shapiro.test(als_baseline1$radt.avg)
+#sw.lfdict <- shapiro.test(als_baseline1$lfdict.avg)
+#sw.rfdict <- shapiro.test(als_baseline1$rfdict.avg)
+#sw.csgaitsp <- shapiro.test(als_baseline1$csgaitsp)
+#sw.t1snum <- shapiro.test(als_baseline1$t1snum.avg)
+
+
+shapiro_vars <- c("lsft.a", "rsft.avg", "left.avg", "reft.avg", "leet.avg", "reet.avg",   "lhft.avg","rhft.avg","lket.avg","rket.avg","ladt.avg","radt.avg")
+
+
+for(var in shapiro_vars) {
+  result <- shapiro.test(als_baseline1[[var]])
+  cat("Variable:", var, "\n")
+  cat("W:", result$statistic, "p-value:", result$p.value, "\n\n")
+}
+
+
+```
+
+```{r}
+#Analyzing which scoring variables are normal
+sw.bublarscoring <- shapiro.test(als_baseline1$bulbar.scoring)
+sw.finemotor <- shapiro.test(als_baseline1$finemotor.scoring)
+sw.grossmotor <- shapiro.test(als_baseline1$grossmotor.scoring)
+sw.respiratory <- shapiro.test(als_baseline1$respiratory.scoring)
+sw.totalscore <- shapiro.test(als_baseline1$als_totalscore)
+
+
+sw.bublarscoring 
+sw.finemotor 
+sw.grossmotor 
+sw.respiratory 
+sw.totalscore
+
+```
+
+```{r}
+tableone_vars <- c("lsft.a", "rsft.avg", "left.avg", "reft.avg", "leet.avg", "reet.avg", "lwet.avg", "rwet.avg", "lhft.avg","rhft.avg","lkft.avg","rkft.avg","lket.avg","rket.avg","ladt.avg","radt.avg","lfdict.avg","rfdict.avg","csgaitsp","t1snum","bulbar.scoring", "finemotor.scoring", "grossmotor.scoring", "respiratory.scoring", "als_totalscore")
+als_baseline1 <- als_baseline1 %>% filter(site_summary.y != "General")
+  
+
+als_baseline1$site_summary.y<- factor(als_baseline1$site_summary.y)
+
+als_baseline1$csgaitsp <- as.numeric(als_baseline1$csgaitsp)
+
+tableone_baseline <- CreateTableOne(vars = tableone_vars , data = als_baseline1, strata = "site_summary.y", addOverall = TRUE, includeNA = TRUE)
+
+tableoneprinted <- print(tableone_baseline, nonnormal = c("reet.avg","lsft.a","age","bulbar.scoring", "finemotor.scoring", "grossmotor.scoring", "respiratory.scoring", "als_totalscore"), missing = TRUE, quote = FALSE)
+```
+
+-There is no statstically significant differance between individuals grouped by site of onset. -Baseline visit may not be credible
+
+```{r}
+onset_tibble <- as_tibble(tableoneprinted)
+write.csv(onset_tibble, file = "final.csv", row.names = FALSE)
+
+
+```
+
+```{r}
+#joining the gait speed/walk data with the site of onset
+#cleaning the data
+als_walk2 <- left_join(als_walk, site_join, by = c("SubjectUID"))
+print(als_walk2)
+
+als_walk2$csgaitsp <- as.numeric(als_walk2$csgaitsp)
+als_walk2 <- als_walk2 %>% select(-tmwrnd,  -evalin, -cscomm, -fsifnd, -fsndothtb, -fscomm, -cst1s, -cst2s, -csavg) %>% filter(complete.cases(site_summary))
+print(als_walk2)
+
+```
+
+```{r}
+
+#sorting the data by subjectUID and visit date
+sorted_data <- als_walk2 %>% 
+  arrange(SubjectUID, Visit.Date)
+
+sorted_data <- sorted_data %>%
+  group_by(SubjectUID)
+
+
+#calculating the change in gait speed between visits along a 3 month interval
+change_data <- sorted_data %>%
+  group_by(SubjectUID) %>%
+   mutate(difference = csgaitsp - lag(csgaitsp, default = last(na.omit(csgaitsp))),
+         difference = ifelse(Visit.Date - lag(Visit.Date) <= months(3), difference, NA))
+
+
+#excluding the NA values from the difference column
+change_data <- change_data[!is.na(change_data$difference), ]
+
+
+
+print(change_data)
+```
+
+```{r}
+#calculate the % change grouped by patient and site of onset
+avg_percent_change <- change_data %>%
+  group_by(SubjectUID)%>%
+  group_by(site_summary) %>%
+  mutate(Diff_gaitsp = difference,
+         Diff_Date = c(NA, diff(Visit.Date)),
+         percent_change = (Diff_gaitsp / Diff_Date)*100) %>%
+  summarise(Average_Percent_Change = mean(percent_change, na.rm = TRUE))
+
+#Calculating the FULL group average rate of change
+group_average <- avg_percent_change %>%
+  summarise(Group_Average_Percent_change = mean(Average_Percent_Change, na.rm = TRUE))
+
+
+```
+
+```{r}
+#Calculate the mean of the difference for onset groups if the distribution is normal, calculate the median and IQR if the distribution is nonnormal
+
+normality_walk <- change_data %>%
+  group_by(SubjectUID)%>%
+  group_by(site_summary) %>%
+  summarise(mean_difference = if (shapiro.test(difference)$p.value >= 0.05) {
+                           mean(difference, na.rm = TRUE)
+                         } else {
+                           median(difference, na.rm = TRUE) + IQR(difference, na.rm = TRUE)
+                         }, 
+Distribution_Type = ifelse(shapiro.test(csgaitsp)$p.value >= 0.5, "Normal", "Non-Normal"))
+
+```
+
+
+```{r}
+##joining sit to stand data with site of onset
+
+
+als_sitstand2 <- left_join(als_sitstand, site_join, by = c("SubjectUID"))
+
+
+#cleaning data and converting the trial in seconds to a number format
+als_sitstand2$t1snum <- as.numeric(als_sitstand2$t1snum)
+
+als_sitstand2 <- als_sitstand2 %>%
+  select(-t1srndoth) %>%
+filter(complete.cases(site_summary))
+
+print(als_sitstand2)
+```
+
+
+
+
+
+```{r}
+#joining the grip strength data with the site of onset
+
+als_grip2 <- left_join(als_grip,site_join , by = c("SubjectUID"))
+
+#cleaning grip strength data
+als_grip2 <- als_grip2 %>%
+  mutate(
+        lt1rpf = ifelse(lt1rpf == 'U', NA, lt1rpf),
+        lt2rpf = ifelse(lt2rpf == 'U', NA, lt2rpf),
+        lt3rpf = ifelse(lt3rpf == 'U', NA, lt3rpf))
+
+als_grip2$lt1rpf <- as.numeric(als_grip$lt1rpf)
+als_grip2$lt2rpf <- as.numeric(als_grip$lt2rpf)
+als_grip2$lt3rpf <- as.numeric(als_grip$lt3rpf)
+als_grip2$lavgrpf <- as.numeric(als_grip$lavgrpf)
+
+#calculating the average of the 3 trials for each visit
+als_grip2$lavgrpf <- rowMeans(als_grip2[, c("lt1rpf", "lt2rpf", "lt3rpf")], na.rm= TRUE)
+
+
+print(als_grip2)
+```
+
+```{r}
+#cleaning grip strength data
+als_grip2 <- als_grip2 %>%
+  mutate(
+        rt1rpf = ifelse(rt1rpf == 'U', NA, rt1rpf),
+        rt2rpf = ifelse(rt2rpf == 'U', NA, rt2rpf),
+        rt3rpf = ifelse(rt3rpf == 'U', NA, rt3rpf))
+
+als_grip2$rt1rpf <- as.numeric(als_grip2$rt1rpf)
+als_grip2$rt2rpf <- as.numeric(als_grip2$rt2rpf)
+als_grip2$rt3rpf <- as.numeric(als_grip2$rt3rpf)
+als_grip2$ravgrpf <- as.numeric(als_grip2$ravgrpf)
+
+#calculating the average of the 3 trials for each visit
+als_grip2$ravgrpf <- rowMeans(als_grip2[, c("rt1rpf", "rt2rpf", "rt3rpf")], na.rm= TRUE)
+
+
+print(als_grip2)
+```
+
+
+```{r}
+#joining the ankle flexion data with the site of onset
+
+als_hhd2 <- left_join(als_hhd, site_join, by = c("SubjectUID"))
+
+#cleaning ankle flexion data
+
+als_hhd2 <- als_hhd2 %>% select(-lsfnt, - lsfab, -lsft1, -lsft2, -lsft3, -lsfntsp, -lsfspo, -rsfnt, -rsfab, -rsft1, -rsft2, - rsft3, -rsfntsp, - lefnt, - lefab, - left1, -left2, -left3, -lefntsp, -refnt, -refspo, - rfdicspo, -hhdinit, -hhdstat, -hhddate, -rsfspo, - lefspo, - refab, -reft1, -reft2, -reft3, -refntsp, -leent, -leeab, - leet1, -leet2, -leet3, -leentsp, -leespo, -reent, -reet1, reet2, reet3, reentsp, -reespo, -lwent, -lweab, -lwet1, -lwet2, -lwet3, -lwentsp, -lwespo, -rweab, -rwet1,  -rwet2, rwet3, rwentsp, -rwespo, -lhfnt, -lhfab, -lhft1, -lhft2, -lhft3, -lhfntsp )
+als_hhd2 <- als_hhd2 %>%
+  mutate(
+        ladt1 = ifelse(ladt1 == 'U', NA, ladt1),
+        ladt2 = ifelse(ladt2 == 'U', NA, ladt2),
+        ladt3 = ifelse(ladt3 == 'U', NA, ladt3))
+
+als_hhd2$ladt1 <- as.numeric(als_hhd2$ladt1)
+als_hhd2$ladt2 <- as.numeric(als_hhd2$ladt2)
+als_hhd2$ladt3 <- as.numeric(als_hhd2$ladt3)
+
+
+als_hhd2 <- als_hhd2 %>%
+  mutate(
+    radt1 = ifelse(radt1 == 'U', NA, radt1),
+    radt2 = ifelse(radt2 == 'U', NA, radt2),
+    radt3 = ifelse(radt3 == 'U', NA, radt3))
+  
+
+als_hhd2$radt1 <- as.numeric(als_hhd2$radt1)
+als_hhd2$radt2 <- as.numeric(als_hhd2$radt2)
+als_hhd2$radt3 <- as.numeric(als_hhd2$radt3)
+#calculating the average of the 3 trials for left ankle flexion
+
+als_hhd2$ladavg <- rowMeans(als_hhd2[, c("ladt1", "ladt2", "ladt3")], na.rm= TRUE)
+
+#calculating the average of the 3 trials for right ankle flexion
+
+als_hhd2$radavg <- rowMeans(als_hhd2[, c("radt1", "radt2", "radt3")], na.rm= TRUE)
+
+
+print(als_hhd2)
+```
+
+
+```{r}
+#joining diagnosis date with the rest of the 10meterwalk visits
+als_walk2 <- merge(als_walk2, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+
+
+#months since diagnosis date for all patients 
+print(als_walk2)
+```
+
+```{r}
+#cleaning mortality files
+
+#converting dieddt to date format 
+
+als_mortality$dieddt <- as.Date(als_mortality$dieddt, format = c("%m/%d/%Y", "%m/%d/%Y"))
+
+als_mortality <- als_mortality %>%
+  select(SubjectUID, dieddt)
+
+```
+
+
+```{r}
+####CREATING SPAGHETTI PLOT FOR 10 METER WALK
+
+#joining diagnosis date with the rest of the 10meterwalk visits
+als_walk2 <- merge(als_walk2, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+
+
+als_walk2 <- merge (als_walk2, als_mortality[, c("SubjectUID", "dieddt")], by = "SubjectUID", all.x = TRUE)
+
+
+#based on inclusion criteria, we are not including those with general onset                    
+als_walk2 <- als_walk2 %>%
+  filter(site_summary != "General")
+         
+
+
+#If no gait speed was recorded due to the pts inability to do it, it is recorded as 0 here 
+als_walk2$csgaitsp[als_walk2$cmspindrl ==1]<- 0
+  
+als_walk2 <- als_walk2 %>%
+  mutate(csgaitsp = ifelse(csgaitsp == 4.00, NA, csgaitsp))
+
+```
+
+```{r}
+
+# Calculate time since diagnosis for each visit in days
+als_walk2 <- als_walk2 %>%
+  mutate(time_since_diagnosis = as.numeric(difftime(Visit.Date, diagdt.x, units = "days")/365))
+
+als_walk2 <- als_walk2 %>%
+  mutate(diag_to_death = as.numeric(difftime(dieddt, diagdt.x, units = "days") / 365))
+
+#sort data and filter where no gait speed was recorded 
+#need to have two data points to be included on graph
+
+
+als_walk2 <- als_walk2 %>%
+  arrange(SubjectUID, time_since_diagnosis) %>%
+  group_by(SubjectUID) %>%
+  filter(n_distinct(csgaitsp) > 2) %>%
+  ungroup()
+
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_walk_graph <- als_walk2 %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(csgaitsp)) >=2) %>%
+  filter(!is.na(csgaitsp)) %>%
+  filter(time_since_diagnosis >= 0) %>%
+  ungroup()
+
+
+site_summary_counts_walk <- filtered_walk_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_walk <- ggplot(filtered_walk_graph, aes(x = time_since_diagnosis, y = csgaitsp, group= SubjectUID, color = as.factor(SubjectUID))) + geom_line(na.rm = TRUE)+
+  geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  
+
+#adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_walk_graph, site_summary %in% site_summary_counts_walk$site_summary[site_summary_counts_walk$n > 10]),
+              aes(group = site_summary ), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5) +
+  labs(x = "Time Since Diagnosis (Years)", y = "Walking Speed (meters/sec)") + geom_hline(yintercept = 0.7, linetype = "dashed", color = "red") + geom_hline(yintercept = 1.24,linetype = "dashed",  color = "black")+
+ theme_minimal() +
+    theme(legend.position = "none") +
+  theme(plot.background = element_rect(fill = "white")) +   coord_cartesian(xlim = c(0, 9), ylim = c(0, 2)) + scale_x_continuous(breaks = seq(0, 9, by = 1)) + 
+    theme(text = element_text(family = "Arial"))
+
+
+
+
+```
+
+```{r}
+
+
+#adding the n = value to the faceted graph
+labels_walk <- data.frame(site_summary = levels(factor(als_walk2$site_summary)),
+                                        n_value= site_summary_counts_walk$n)
+labels_walk$SubjectUID <- NA
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+
+
+graph_walk <- graph_walk + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") +   geom_point()
+#+  geom_text(data= labels_walk, aes(x=Inf, y = Inf, label = paste ("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE) +   geom_point()
+file_name <- paste0("walk_", page_to_display, ".png")
+
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_walk, width = 8, height = 6)  
+}
+
+graph_walk
+```
+```{r Save filtered walk data as a csv}
+write.csv(filtered_walk_graph, file = "walk_graph_data.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+### CREATING SPAGHETTI PLOT FOR SIT TO STAND
+
+#joining diagnosis date with the rest of the sit to stand visits
+als_sitstand2 <- merge(als_sitstand2, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+
+
+
+als_sitstand2 <- merge (als_sitstand2, als_mortality[, c("SubjectUID", "dieddt")], by = "SubjectUID", all.x = TRUE)
+                    
+#based on inclusion criteria, we are not including those with general onset                    
+als_sitstand2 <- als_sitstand2 %>%
+  filter(site_summary != "General")
+
+
+#If no sit to stand was not recorded due to the pts inability to do it, it is recorded as 0 here 
+als_sitstand2$t1snum[als_sitstand2$t1srnd==1]<- 0
+
+
+#Calculate time since diagnosis for each visit
+als_sitstand2 <- als_sitstand2 %>%
+  mutate(time_since_diagnosis = as.numeric(difftime(Visit.Date, diagdt, units = "days")/365))
+
+#calculate time from diagnosis until death 
+als_sitstand2 <- als_sitstand2 %>%
+  mutate(diag_to_death = as.numeric(difftime(dieddt, diagdt, units = "days") / 365))
+
+#sort data and filter where no sitstand test was recorded 
+als_sitstand2 <- als_sitstand2 %>% 
+  arrange(SubjectUID, time_since_diagnosis) %>%
+  group_by(SubjectUID) %>%
+    filter(time_since_diagnosis >= 0) %>% 
+   filter(!is.na(t1snum)) %>%
+  filter(n_distinct(t1snum) > 2)
+
+
+
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_sitstand_graph <- als_sitstand2 %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(t1snum)) >=2) %>%
+  ungroup()
+
+
+#determine n values for each site summary
+site_summary_counts_sitstand <- filtered_sitstand_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID), SubjectUID = first(SubjectUID))
+
+# Remove the general site_summary from the data and counts because there is no data for that section of the graph
+filtered_sitstand_graph <- filtered_sitstand_graph %>%
+  filter(site_summary != "general")
+site_summary_counts_sitstand <- site_summary_counts_sitstand %>%
+  filter(site_summary != "general")
+
+#Create the plot
+graph_stand <- ggplot(filtered_sitstand_graph, aes(x = time_since_diagnosis, y = t1snum, group= SubjectUID, color = as.factor(SubjectUID))) +
+    geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  geom_line(na.rm = TRUE) +  
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_sitstand_graph, site_summary %in% site_summary_counts_sitstand$site_summary[site_summary_counts_sitstand$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5)+
+  labs(x = "Time Since Diagnosis (Years)", y = "5 Sit to Stands (seconds)") +
+ geom_hline(yintercept = 7.8, linetype = "dashed", color = "black")+ geom_hline(yintercept = 15.0, linetype= "dashed", color = "red")+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(plot.background = element_rect(fill = "white"))+ 
+    coord_cartesian(ylim = c(0, 43)) +
+  scale_x_continuous(breaks = seq(0, 7, by = 1)) +
+      theme(text = element_text(family = "Arial"))
+
+
+
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+graph_stand <- graph_stand + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") +   geom_point()
+ # geom_text(data = site_summary_counts_sitstand, aes(x = Inf, y = Inf, label = paste("n =", n)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE) 
+
+  file_name <- paste0("sittostand_", page_to_display, ".png")
+
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_stand, width = 8, height = 6)  
+}
+  
+graph_stand
+```
+
+```{r}
+#Sit to stand graph without "unable to complete" included
+#Create the plot
+filtered_sitstand_graph2 <- filtered_sitstand_graph %>%   filter(t1snum != 0)
+
+
+graph_stand2 <- ggplot(filtered_sitstand_graph2, aes(x = time_since_diagnosis, y = t1snum, group= SubjectUID, color = as.factor(SubjectUID))) +
+    geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  geom_line(na.rm = TRUE) +  
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_sitstand_graph, site_summary %in% site_summary_counts_sitstand$site_summary[site_summary_counts_sitstand$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5)+
+  labs(x = "Time Since Diagnosis (Years)", y = "5 Sit to Stands (seconds)") +
+ geom_hline(yintercept = 7.8, linetype = "dashed", color = "black")+ geom_hline(yintercept = 15.0, linetype= "dashed", color = "red")+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(plot.background = element_rect(fill = "white"))+ 
+    coord_cartesian(xlim = c(0, 7), ylim = c(0, 43)) + 
+  scale_x_continuous(breaks = seq(0, 7, by = 1)) + 
+      theme(text = element_text(family = "Arial"))
+
+
+
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+graph_stand2 <- graph_stand2 + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") +   geom_point()
+ # geom_text(data = site_summary_counts_sitstand, aes(x = Inf, y = Inf, label = paste("n =", n)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE) 
+
+  file_name <- paste0("sittostand2_", page_to_display, ".png")
+
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_stand2, width = 8, height = 6)  
+}
+  
+graph_stand2
+
+```
+```{r Save Sit to stand data as csv}
+write.csv(filtered_sitstand_graph2, file = "sitstand_graph_data.csv", row.names = FALSE)
+```
+
+
+```{r}
+### CREATING SPAGHETTI PLOT FOR LEFT GRIP STRENGTH
+#joining diagnosis date with the rest of the grip strength visits
+als_grip2 <- merge(als_grip2, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+als_grip2 <- als_grip2 %>%
+  filter(site_summary != "General")
+
+als_grip2 <- merge (als_grip2, als_mortality[, c("SubjectUID", "dieddt")], by = "SubjectUID", all.x = TRUE)
+
+als_grip2$lavgrpf[als_grip2$lrndrl==1]<- 0
+
+                    
+```
+
+```{r}
+
+# Calculate time since diagnosis for each visit in days
+als_grip2 <- als_grip2 %>%
+  mutate(time_since_diagnosis = as.numeric(difftime(Visit.Date, diagdt, units = "days")/365))
+
+#calculate time from diagnosis until death 
+als_grip2 <- als_grip2 %>%
+  mutate(diag_to_death = as.numeric(difftime(dieddt, diagdt, units = "days") / 365))
+
+# Remove rows with missing or NA site_summary
+als_grip2left <- als_grip2%>%
+  filter(!is.na(site_summary) & site_summary != "") %>%
+  filter(time_since_diagnosis >= 0) %>%
+  filter(!is.na(lavgrpf))
+
+
+#sort data and filter where no grip strength data for left hand was recorded 
+
+als_grip2left <- als_grip2 %>% 
+  arrange(SubjectUID, time_since_diagnosis) %>%
+  group_by(SubjectUID) %>%
+  filter(n_distinct(lavgrpf) > 2) %>%
+  filter(!is.na(lavgrpf))
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_left_grip_graph <- als_grip2left %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(lavgrpf)) >=2, !is.null(diagdt), !is.na(diagdt)) %>%
+  ungroup()
+
+site_summary_counts_left_grip <- filtered_left_grip_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_left_grip <- ggplot(als_grip2left, aes(x = time_since_diagnosis, y = lavgrpf, group= SubjectUID, color = as.factor(SubjectUID))) +
+  geom_line(na.rm = TRUE) +  
+    geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(als_grip2left, site_summary %in% site_summary_counts_left_grip$site_summary[site_summary_counts_left_grip$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5)+
+  labs(x = "Time Since Diagnosis(Years)", y = "Left Grip Strength (lbs)")+ geom_hline(yintercept = 59.9, linetype = "dashed", color = "blue") + geom_hline(yintercept = 35.3,linetype = "dashed",  color = "black")+
+   theme_minimal() +
+    theme(legend.position = "none") + theme(plot.background = element_rect(fill = "white")) +   coord_cartesian(xlim = c(0,10), ylim = c(0, 120)) + 
+  scale_x_continuous(breaks = seq(0, 10, by = 1)) + 
+      theme(text = element_text(family = "Arial"))
+
+
+```
+
+```{r}
+
+
+#adding the n = value to the faceted graph
+labels_left_grip <- data.frame(site_summary = levels(factor(als_grip2left$site_summary)),
+                                        n_value= site_summary_counts_left_grip$n)
+labels_left_grip$SubjectUID <- NA
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+  
+graph_left_grip <- graph_left_grip + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") + geom_point()
+#  geom_text(data= labels_left_grip, aes(x=Inf, y = Inf, label = paste ("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE)
+  file_name <- paste0("leftgrip_", page_to_display, ".png")
+
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_left_grip, width = 8, height = 6)  
+}
+graph_left_grip
+  
+```
+```{r Save Left Grip Strength Data}
+write.csv(filtered_left_grip_graph, file = "leftgrip_graph_data.csv", row.names = FALSE)
+```
+
+```{r}
+#CREATING RIGHT GRIP STRENGTH GRAPH
+#sort data and filter where no grip strength data for left hand was recorded 
+
+als_grip2 <- als_grip2 %>% arrange(SubjectUID, time_since_diagnosis)
+als_grip2 <- als_grip2[complete.cases(als_grip2$ravgrpf), ]
+als_grip2 <- als_grip2 %>%
+  filter(site_summary != "General")
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_right_grip_graph <- als_grip2 %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(ravgrpf)) >=2) %>%
+  filter(time_since_diagnosis >= 0) %>%
+  ungroup()
+
+#adding in 0 values for when pt was not able to perform test due to weakness
+als_grip2$ravgrpf[als_grip2$rrndrl==1]<- 0
+
+site_summary_counts_right_grip <- filtered_right_grip_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_right_grip <- ggplot(filtered_right_grip_graph, aes(x = time_since_diagnosis, y = ravgrpf, group= SubjectUID, color = as.factor(SubjectUID))) +
+  geom_line(na.rm = TRUE) +  
+   geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_right_grip_graph, site_summary %in% site_summary_counts_right_grip$site_summary[site_summary_counts_right_grip$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5) + 
+  labs(x = "Time Since Diagnosis(Years)", y = "Right Grip Strength (lbs)") + geom_hline(yintercept = 59.9, linetype = "dashed", color = "blue") + geom_hline(yintercept = 35.3,linetype = "dashed",  color = "black")+
+   theme_minimal() +
+    theme(legend.position = "none") +  theme(legend.position = "none") + theme(plot.background = element_rect(fill = "white"))+   coord_cartesian(xlim = c(0,10), ylim = c(0, 120)) + 
+  scale_x_continuous(breaks = seq(0, 10, by = 1))
+      theme(text = element_text(family = "Arial"))
+
+
+
+#adding the n = value to the faceted graph
+labels_right_grip <- data.frame(site_summary = levels(factor(als_grip2$site_summary)),
+                                        n_value= site_summary_counts_right_grip$n)
+labels_right_grip$SubjectUID <- NA
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+graph_right_grip <- graph_right_grip + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") + geom_point()
+  #geom_text(data = labels_right_grip, aes(x = Inf, y = Inf, label = paste("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black") +guides(color = 'none') 
+ file_name <- paste0("rightgrip_", page_to_display, ".png")
+
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_right_grip, width = 8, height = 6)  
+}
+
+graph_right_grip
+```
+```{r Save Right Grip Strength Data}
+write.csv(filtered_right_grip_graph, file = "rightgrip_graph_data.csv", row.names = FALSE)
+```
+
+```{r}
+#CREATING GRAPH FOR RIGHT ANKLE FLEXION
+
+als_hhd2 <- merge(als_hhd2, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+
+als_hhd2 <- merge (als_hhd2, als_mortality[, c("SubjectUID", "dieddt")], by = "SubjectUID", all.x = TRUE)
+
+als_hhd2$radavg[als_hhd2$radntsp==1]<- 0
+
+als_hhd2 <- als_hhd2 %>%
+    filter(site_summary != "General")
+
+# Calculate time since diagnosis for each visit in days
+als_hhd2 <- als_hhd2 %>%
+  mutate(time_since_diagnosis = as.numeric(difftime(Visit.Date, diagdt, units = "days")/365))
+
+#calculate time from diagnosis until death 
+als_hhd2 <- als_hhd2 %>%
+  mutate(diag_to_death = as.numeric(difftime(dieddt, diagdt, units = "days") / 365))
+
+# Remove rows with missing or NA site_summary
+als_hhd2 <- als_hhd2%>%
+  filter(!is.na(site_summary) & site_summary != "") %>%
+  filter(time_since_diagnosis >= 0) 
+  
+
+#sort data and filter where no flexion data for right ankle was recorded 
+
+als_hhd2 <- als_hhd2 %>% arrange(SubjectUID, time_since_diagnosis)
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_right_ankle_graph <- als_hhd2 %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(radavg)) >=2) %>%
+  filter(!is.na(radavg), !is.null(diagdt), !is.na(diagdt)) %>%
+  ungroup()
+
+
+site_summary_counts_right_ankle <- filtered_right_ankle_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_right_ankle <- ggplot(filtered_right_ankle_graph, aes(x = time_since_diagnosis, y = radavg, group= SubjectUID, color = as.factor(SubjectUID))) +
+  geom_line(na.rm = TRUE) +
+  geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_right_ankle_graph, site_summary %in% site_summary_counts_right_ankle$site_summary[site_summary_counts_right_ankle$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5) + geom_hline(yintercept = 38, linetype = "dashed", color = "black") +
+  labs(x = "Time Since Diagnosis(Years)", y = "Right Ankle Dorsiflexion Strength (lbs)") +
+   theme_minimal() + 
+    theme(legend.position = "none") + theme(plot.background = element_rect(fill = "white")) +   coord_cartesian(xlim = c(0,10), ylim = c(0, 50)) + 
+  scale_x_continuous(breaks = seq(0, 10, by = 1)) + 
+      theme(text = element_text(family = "Arial"))
+
+
+
+#adding the n = value to the faceted graph
+labels_right_ankle <- data.frame(site_summary = levels(factor(als_hhd2$site_summary)),
+                                        n_value= site_summary_counts_right_ankle$n)
+labels_right_ankle$SubjectUID <- NA
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+graph_right_ankle <- graph_right_ankle + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") + geom_point()
+  #geom_text(data= labels_right_ankle, aes(x=Inf, y = Inf, label = paste ("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE) 
+ file_name <- paste0("rightankle_", page_to_display, ".png")
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_right_ankle, width = 8, height = 6)  
+}
+graph_right_ankle
+```
+
+```{r Saving Right Ankle Data }
+write.csv(filtered_right_ankle_graph, file = "rightankle_graph_data.csv", row.names = FALSE)
+```
+
+```{r}
+#CREATING LEFT ANKLE FLEXION GRAPH
+
+als_hhd2$ladavg[als_hhd2$ladntsp==1]<- 0
+#sort data and filter where no flexion data for left ankle was recorded 
+
+als_hhd2 <- als_hhd2 %>% arrange(SubjectUID, time_since_diagnosis)
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_left_ankle_graph <- als_hhd2 %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(ladavg)) >=2) %>%
+  filter(time_since_diagnosis >= 0) %>%
+  filter(!is.na(ladavg)) %>%
+  ungroup()
+
+
+site_summary_counts_left_ankle <- filtered_left_ankle_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_left_ankle <- ggplot(filtered_left_ankle_graph, aes(x = time_since_diagnosis, y = ladavg, group= SubjectUID, color = as.factor(SubjectUID))) +
+  geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2)+
+  geom_line(na.rm = TRUE) +  
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_left_ankle_graph, site_summary %in% site_summary_counts_left_ankle$site_summary[site_summary_counts_left_ankle$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5) + geom_hline(yintercept = 38, linetype = "dashed", color = "black") +
+  labs(x = "Time Since Diagnosis(Years)", y = "Left Ankle Dorsiflexion Strength (lbs)") +
+   theme_minimal() +
+    theme(legend.position = "none") + theme(plot.background = element_rect(fill = "white")) +   coord_cartesian(xlim = c(0,10), ylim = c(0, 50)) + 
+  scale_x_continuous(breaks = seq(0, 10, by = 1)) + 
+  theme(text = element_text(family = "Arial"))
+
+
+
+#adding the n = value to the faceted graph
+labels_left_ankle <- data.frame(site_summary = levels(factor(als_hhd2$site_summary)),
+                                        n_value= site_summary_counts_left_ankle$n)
+labels_left_ankle$SubjectUID <- NA
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+graph_left_ankle <- graph_left_ankle + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") + geom_point()
+#  geom_text(data= labels_left_ankle, aes(x=Inf, y = Inf, label = paste ("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE)
+ file_name <- paste0("leftankle_", page_to_display, ".png")
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_left_ankle, width = 8, height = 6)  
+}
+graph_left_ankle
+```
+```{r Saving Left Ankle Data}
+write.csv(filtered_left_ankle_graph, file = "leftankle_graph_data.csv", row.names = FALSE)
+```
+
+```{r}
+#CREATING ALS FRSR SURVEY DATA GRAPH 
+
+#joining als_frsr data with site summary
+
+als_frsr<- left_join(als_frsr, site_join, by = c(("SubjectUID")))
+
+
+#joining diagnosis date and death date with the rest of the alsfrsr survey data
+als_frsr <- merge(als_frsr, als_history[, c("SubjectUID", "diagdt")], by = "SubjectUID", all.x = TRUE)
+
+als_frsr <- merge (als_frsr, als_mortality[, c("SubjectUID", "dieddt")], by = "SubjectUID", all.x = TRUE)
+
+als_frsr <- als_frsr %>%
+  filter(site_summary != "General")
+
+
+
+# Calculate time since diagnosis for each visit in days
+als_frsr <- als_frsr %>%
+  mutate(time_since_diagnosis = as.numeric(difftime(Visit.Date, diagdt, units = "days")/365))
+
+#calculate time from diagnosis until death 
+als_frsr <- als_frsr %>%
+  mutate(diag_to_death = as.numeric(difftime(dieddt, diagdt, units = "days") / 365))
+
+# Remove rows with missing or NA site_summary
+als_frsr <- als_frsr%>%
+  filter(!is.na(site_summary) & site_summary != "") %>%
+  filter(time_since_diagnosis >= 0) 
+
+
+#sort data and filter where no survey data was recorded 
+
+als_frsr <- als_frsr %>% arrange(SubjectUID, time_since_diagnosis)
+als_frsr <- als_frsr[complete.cases(als_frsr$alsfrst), ]
+
+#Calculate the n-value for each site summary
+#first, filter data to include the subjectuids included on the graph
+filtered_survey_graph <- als_frsr %>%
+  group_by(SubjectUID) %>%
+  filter(sum(!is.na(alsfrst)) >=2) %>%
+  ungroup()
+
+
+site_summary_counts_survey <- filtered_survey_graph %>%
+  group_by(site_summary) %>%
+  summarize(n = n_distinct(SubjectUID))
+
+# Create the plot
+graph_survey <- ggplot(filtered_survey_graph, aes(x = time_since_diagnosis, y = alsfrst, group= SubjectUID, color = as.factor(SubjectUID))) +
+   geom_point(aes(x = diag_to_death, y = 0, group = SubjectUID, color = SubjectUID), shape = 4, size = 2) +
+  geom_line(na.rm = TRUE) +  
+  #adding in smoothed average line for site summary graphs where n >= 10 
+ geom_smooth(data = subset(filtered_survey_graph, site_summary %in% site_summary_counts_survey$site_summary[site_summary_counts_survey$n > 10]),
+              aes(group = site_summary), color = "black",
+              se = TRUE, method = "loess", formula = y ~ x, linewidth = 1, alpha = 0.5) + 
+  labs(x = "Time Since Diagnosis(Years)", y = "ALSFRS-R") +
+    theme_minimal() + 
+    theme(legend.position = "none") + coord_cartesian(xlim = c(0, 10), ylim = c(0, 50)) + 
+  theme(plot.background = element_rect(fill = "white")) + 
+  scale_x_continuous(breaks = seq(0, 10, by = 1))
+      theme(text = element_text(family = "Arial"))
+
+
+#adding the n = value to the faceted graph
+labels_survey <- data.frame(site_summary = site_summary_counts_survey$site_summary,
+                                        n_value= site_summary_counts_survey$n)
+labels_survey$SubjectUID <- NA
+
+pages_to_display <- 3
+total_pages <- 3
+for (page_to_display in 1:total_pages) {
+  
+graph_survey <- graph_survey + facet_wrap_paginate(~site_summary, nrow = 1, ncol=1, page = page_to_display, scales ="free") +  geom_point()
+  #geom_text(data= labels_survey, aes(x=Inf, y = Inf, label = paste ("n =", n_value)), hjust = 1, vjust = 1, size = 4, color = "black", show.legend = FALSE) 
+
+ file_name <- paste0("survey_", page_to_display, ".png")
+  
+  # Save the plot using ggsave
+  ggsave(file_name, plot = graph_survey, width = 8, height = 6)  
+}
+graph_survey
+
+
+```
+```{r Saving FRSR Survey Data}
+write.csv(filtered_survey_graph, file = "survey_graph_data.csv", row.names = FALSE)
+```
+
+
+
+
+```{r}
+#constructing the survival curve
+
+als_walk2 <- als_walk2 %>%
+  filter(!is.na(time_since_diagnosis)) %>%
+  filter(!is.na(csgaitsp))
+
+
+als_walk2 <- als_walk2 %>%
+  mutate(time_to_event = ifelse(csgaitsp < 0.8, time_since_diagnosis, NA))
+
+als_walk2$event_indicator <- ifelse(als_walk2$csgaitsp < 0.8, 1, 0)
+
+
+als_walk2 <- als_walk2 %>%
+  group_by(SubjectUID) %>%
+  mutate(earliest_0 = min(time_to_event[event_indicator == 0], na.rm = TRUE),
+         has_1 = any(event_indicator == 1))
+
+# Filter to include only unique subjects
+unique_subjects <- als_walk2 %>%
+  filter(!duplicated(SubjectUID) | (has_1 & earliest_0 == 0))
+
+
+library(survival)
+
+
+surv_object <- Surv(unique_subjects$time_to_event, unique_subjects$event_indicator)
+
+```
+```{r}
+# Create a Kaplan-Meier survival curve stratified by site of onset
+km_fit <- survfit(Surv(time_to_event, event_indicator) ~ strata(site_summary), data = unique_subjects)
+# Plot the Kaplan-Meier survival curve with stratification
+plot(km_fit, xlab = "Time Since Diagnosis (Years)", ylab = "Community Ambulation Survival Probability")
+```
+
+```{r}
+library(survminer)
+
+survival_curve <- ggsurvplot(km_fit,  legend.labs =
+    c("Bulbar", "Upper Limb", "Lower Limb"),  xlab = "Time Since Diagnosis (Years)", ylab = "Community Ambulation Survival Probability",  legend.title = "", font.family = "Arial", break.time.by = 1)
+
+
+
+grid.draw.ggsurvplot <- function(x){
+  survminer:::print.ggsurvplot(x, newpage = FALSE)
+}
+
+ggsave("survival.png", plot = survival_curve, 
+       dpi=300, width = 10, height = 7, units = "in")
+
+```
+
